@@ -86,7 +86,7 @@ func main() {
 
 						// We decrypted successfully
 						close(done)
-						fmt.Println("Wallet decoded successfully")
+						fmt.Printf("Wallet decoded successfully with password \"%s\"\n", p)
 						fmt.Printf("Decoded: %s\n", string(dec))
 						return
 					}
