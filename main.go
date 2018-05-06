@@ -18,6 +18,11 @@ import (
 
 func main() {
 
+	if len(os.Args) != 3 {
+		fmt.Println("Usage: walletRecover [pathToEncryptedWallet] [pathToPasswordDictionary]")
+		return
+	}
+
 	// read the encrypted file
 	encodedPayload, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
@@ -54,6 +59,9 @@ func main() {
 		}
 	}(sc)
 
+	// array of methods for decrypting different blockchain.info legacy formats
+	formats := []func(string, []byte) (string, error){decrypt, decryptLegacy1, decryptLegacy2}
+
 	// 20 worker goroutines pulling from the worklist
 	wg := new(sync.WaitGroup)
 	for x := 0; x < 20; x++ {
@@ -63,22 +71,26 @@ func main() {
 			for {
 				select {
 				case p := <-worklist:
-					dec, err := decrypt(p, cipherText)
-					if err != nil {
-						errors <- err
-					}
 
-					var e interface{}
-					err = json.Unmarshal([]byte(dec), &e)
-					if err != nil {
-						progress <- fmt.Sprintf("Not json: %s", p)
-						continue
+					// Try decrypting in each legacy format
+					for _, decryptFormat := range formats {
+						dec, err := decryptFormat(p, cipherText)
+						if err != nil {
+							errors <- err
+						}
+
+						// try to marshal into json
+						if err = attemptJSON(dec); err != nil {
+							continue
+						}
+
+						// We decrypted successfully
+						close(done)
+						fmt.Println("Wallet decoded successfully")
+						fmt.Printf("Decoded: %s\n", string(dec))
+						return
 					}
-					close(done)
-					fmt.Printf("Decoded: %s\n", string(dec))
-					fmt.Println("Done")
-					fmt.Println("************")
-					fmt.Println("Success: " + p)
+					progress <- fmt.Sprintf("Not json: %s", p)
 
 				case <-done:
 					return
@@ -108,6 +120,13 @@ func main() {
 	}()
 
 	wg.Wait()
+	close(progress)
+}
+
+// attempt to marshal into json
+func attemptJSON(s string) error {
+	var f interface{}
+	return json.Unmarshal([]byte(s), &f)
 }
 
 // most recent legacy wallet format
@@ -155,7 +174,7 @@ func decryptLegacy1(plainKey string, cipherText []byte) (string, error) {
 // No Salt or IV
 func decryptLegacy2(plainKey string, cipherText []byte) (string, error) {
 
-	iv := []byte{}
+	iv := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	salt := []byte{}
 
 	cipherKey := pbkdf2.Key([]byte(plainKey), salt, 10, 32, sha1.New)
