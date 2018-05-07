@@ -7,6 +7,8 @@ It supports multiple legacy blockchain.info encryption formats
 
 	go get -u github.com/solipsis/walletRecover
 	go install github.com/solipsis/walletRecover
+	
+	Or if you'd prefer to not build from source, you can find precompiled binaries in the releases tab
   
 ## Usage ##
 
